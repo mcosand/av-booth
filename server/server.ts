@@ -1,11 +1,14 @@
+import http from 'http';
 import express from 'express';
 import { readFile } from 'fs/promises';
 import AtemService from './services/atem';
 import { TallyService } from './services/tally';
 import { CameraConfig, CamerasService } from './services/cameras';
+import { Server as SocketIOServer } from 'socket.io';
+import { ClientToServerMessage, ServerToClientMessages, TallyMessage } from '../common/socket-models';
 
 interface ConfigJson {
-  port?: number|string;
+  port?: number | string;
   atemIP: string;
   cameras: CameraConfig[];
 }
@@ -18,13 +21,59 @@ async function startServer() {
   const tallySvc = new TallyService();
   const camerasSvc = new CamerasService(config.cameras);
 
-  
+
   console.log(await camerasSvc.getStatus());
 
   tallySvc.init();
- // tallySvc.test();
+
+  const app = express();
+  const httpServer = http.createServer(app);
+  const io = new SocketIOServer<ClientToServerMessage, ServerToClientMessages>(httpServer, {
+    path: '/ws',
+    cors: {
+      origin: "*", // Replace with your frontend URL in production
+    },
+  });
+  const port = Number(config.port ?? 1885);
+
+  io.on('connection', (socket) => {
+    console.log('New client connected:', socket.id);
+    socket.on('zoom', data => {
+      console.log('zoom', data);
+    })
+
+    socket.on('get-tally', () => {
+      socket.emit('tally', atemSvc.getCurrentSources());
+    });
+
+    socket.on('zoom', ({ id, speed }) => {
+      camerasSvc.requestZoom(id, speed);
+    })
+    // socket.on('message', (data) => {
+    //   console.log(`Received message of type ${data.type}`, data.payload);
+
+    //   switch (data.type) {
+    //     case 'CAMERA_CONTROL':
+    //       // Process camera control
+    //       break;
+    //     case 'CHAT':
+    //       // Handle other message types
+    //       break;
+    //     default:
+    //       console.warn('Unknown message type:', data.type);
+    //   }
+    // });
+
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+    });
+
+    socket.emit('tally', atemSvc.getCurrentSources());
+  });
+
   atemSvc.on('sourcesChanged', (pv, pgm) => {
     console.log('atem sources changed:', pv, pgm);
+    io.emit('tally', { program: pgm, preview: pv } as TallyMessage);
     tallySvc.setSources(pv, pgm);
   });
   atemSvc.on('reconnected', () => {
@@ -32,9 +81,6 @@ async function startServer() {
     tallySvc.setSources(srcs.preview, srcs.program);
   })
   atemSvc.start();
-
-  const app = express();
-  const port = Number(config.port ?? 1885);
 
   app.use('/', express.static('./public'))
 
@@ -51,11 +97,11 @@ async function startServer() {
   app.post('/api/video/fadeTo/:source', async (req, res) => {
     const src = Number(req.params.source);
     if (isNaN(src)) {
-      res.json({status:'error'});
+      res.json({ status: 'error' });
       return;
     }
     await atemSvc.fadeToSource(src);
-    res.json({status:'ok', });
+    res.json({ status: 'ok', });
   })
 
   app.get('/api/cameras/status', async (_req, res) => {
@@ -63,11 +109,11 @@ async function startServer() {
   })
 
   app.post('/api/cameras/power/:state', async (req, res) => {
-    res.json({ result: await camerasSvc.setPower(req.params.state === 'on')})
+    res.json({ result: await camerasSvc.setPower(req.params.state === 'on') })
   })
 
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`Server listening at http://localhost:${port}`);
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`Server listening at http://0.0.0.0:${port}`);
   });
 }
 

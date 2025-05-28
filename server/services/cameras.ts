@@ -38,9 +38,18 @@ class CameraClient {
     }
   }
 
+  async requestZoom(speed: number) {
+    let data = 0;
+    if (speed) {
+      data = ((speed > 0) ? 0x20 : 0x30) + (Math.ceil(Math.abs(speed) * 7));
+    }
+    const result = await this.send(Buffer.from([0x81, 0x01, 0x04, 0x07, data, 0xFF]));
+    return true;
+  }
+
   private send(data: Buffer) {
     return new Promise<Buffer>((resolve, reject) => {
-      const queueItem = { data, resolve, reject};
+      const queueItem = { data, resolve, reject };
       this.queue.push(queueItem);
       this.checkSend();
     })
@@ -95,12 +104,12 @@ export class CamerasService {
   }
 
   async getStatus() {
-    const [ powers ] = await Promise.all([
+    const [powers] = await Promise.all([
       Promise.all(this.clients.map(c => c.queryPower())),
     ]);
-console.log('finished getting updates');
+    console.log('finished getting updates');
     return this.idxs.map(i => ({
-      name: `${i+1}`,
+      name: `${i + 1}`,
       on: powers[i]
     }));
     //return await this.clients[0].queryPower();
@@ -110,6 +119,9 @@ console.log('finished getting updates');
     return Promise.all(this.clients.map(c => c.setPower(on)));
   }
 
+  requestZoom(id: number, speed: number) {
+    return this.clients[id - 1]?.requestZoom(speed);
+  }
   // private async queryPower(id: number) {
   //   const result = await this.send(id, Buffer.from([0x81, 0x09, 0x04, 0x00, 0xFF]));
   //   return result[2] === 0x02;

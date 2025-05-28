@@ -12,7 +12,12 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 2023,
     proxy: {
-      '/api': 'http://127.0.0.1:1885'
+      '/api': 'http://127.0.0.1:1885',
+      '/ws': {
+        target: 'ws://127.0.0.1:1885',
+        ws: true,
+        rewriteWsOrigin: true,
+      },
     }
   }
 })
