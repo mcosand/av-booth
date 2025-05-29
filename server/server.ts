@@ -1,4 +1,5 @@
 import http from 'http';
+import { resolve } from 'path';
 import express from 'express';
 import { readFile } from 'fs/promises';
 import AtemService from './services/atem';
@@ -38,31 +39,11 @@ async function startServer() {
 
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
-    socket.on('zoom', data => {
-      console.log('zoom', data);
-    })
 
-    socket.on('get-tally', () => {
-      socket.emit('tally', atemSvc.getCurrentSources());
-    });
+    socket.on('get-tally', () => socket.emit('tally', atemSvc.getCurrentSources()));
 
-    socket.on('zoom', ({ id, speed }) => {
-      camerasSvc.requestZoom(id, speed);
-    })
-    // socket.on('message', (data) => {
-    //   console.log(`Received message of type ${data.type}`, data.payload);
-
-    //   switch (data.type) {
-    //     case 'CAMERA_CONTROL':
-    //       // Process camera control
-    //       break;
-    //     case 'CHAT':
-    //       // Handle other message types
-    //       break;
-    //     default:
-    //       console.warn('Unknown message type:', data.type);
-    //   }
-    // });
+    socket.on('zoom', ({ id, speed }) => camerasSvc.requestZoom(id, speed));
+    socket.on('pantilt', ({ id, speedX, speedY }) => camerasSvc.requestPanTilt(id, speedX, speedY));
 
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
@@ -81,8 +62,6 @@ async function startServer() {
     tallySvc.setSources(srcs.preview, srcs.program);
   })
   atemSvc.start();
-
-  app.use('/', express.static('./public'))
 
   app.get('/hi', (_req, res) => {
     res.send('Hello from TypeScript backend!');
@@ -111,6 +90,9 @@ async function startServer() {
   app.post('/api/cameras/power/:state', async (req, res) => {
     res.json({ result: await camerasSvc.setPower(req.params.state === 'on') })
   })
+
+  app.use('/', express.static('public'));
+  app.get('{*path}', (req, res) => res.sendFile('public/index.html'));
 
   httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Server listening at http://0.0.0.0:${port}`);

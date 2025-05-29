@@ -5,24 +5,27 @@ import { ConfigContext } from "../App";
 import { useSocket } from "../SocketContext";
 import type { TallyMessage } from "../../common/socket-models";
 
-
 export default function JoystickScreen() {
   const config = React.useContext(ConfigContext);
   const socket = useSocket();
   const [selectedCam, setSelectedCam] = React.useState<number>(1);
   const [tally, setTally] = React.useState<TallyMessage>();
-  const [lastEvent, setLastEvent] = React.useState<string>('');
-  const [lastZoomEvent, setLastZoomEvent] = React.useState<string>('');
 
   const onPanTiltEvent = React.useCallback(function onPanTileEvent(e: IJoystickUpdateEvent) {
-    setLastEvent(JSON.stringify(e, null, 2));
-  }, []);
+    console.log('tilt event', e);
+    if (e.type === 'stop') {
+      socket?.emit('pantilt', { id: selectedCam, speedX: 0, speedY: 0 });
+    } else if (e.type === 'move') {
+      if (!e.x) e.x = 0;
+      if (!e.y) e.y = 0;
+      socket?.emit('pantilt', { id: selectedCam, speedX: e.x * Math.abs(e.x), speedY: e.y * Math.abs(e.y) });
+    }
+  }, [socket, selectedCam]);
 
   const onZoomEvent = React.useCallback(function onZoomEvent(e: IJoystickUpdateEvent) {
     console.log('zoom event', e);
-    //setLastZoomEvent(JSON.stringify(e, null, 2));
     if (e.type === 'stop') {
-      socket?.emit('zoom', { id: selectedCam, stop: true, speed: 0 });
+      socket?.emit('zoom', { id: selectedCam, speed: 0 });
     } else if (e.type === 'move') {
       socket?.emit('zoom', { id: selectedCam, speed: e.y ?? 0 });
     }

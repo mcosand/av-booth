@@ -5,6 +5,17 @@ export interface CameraConfig {
   ip: string;
 }
 
+const DIRECTION_COMMAND_BYTES = [
+  [0x02, 0x03],  // 0° to 45° - Right
+  [0x02, 0x01],  // 45° to 90° - UpRight
+  [0x03, 0x01],  // 90° to 135° - Up
+  [0x01, 0x01],  // 135° to 180° - UpLeft
+  [0x01, 0x03],  // 180° to 225° - Left
+  [0x01, 0x02],  // 225° to 270° - DownLeft
+  [0x03, 0x02],  // 270° to 315° - Down
+  [0x02, 0x02],  // 315° to 360° - DownRight
+];
+
 class CameraClient {
   readonly id: number;
   private readonly config: CameraConfig;
@@ -45,6 +56,25 @@ class CameraClient {
     }
     const result = await this.send(Buffer.from([0x81, 0x01, 0x04, 0x07, data, 0xFF]));
     return true;
+  }
+
+  async requestPanTilt(speedX: number, speedY: number) {
+    const buffer = Buffer.from([0x81, 0x01, 0x06, 0x01, 0x00, 0x00, 0x03, 0x03, 0xFF]);
+    if (speedX !== 0 || speedY !== 0) {
+      // Calculate the angle in radians from the positive X-axis
+      const angle = Math.atan2(speedY, speedX);
+      let degrees = angle * (180 / Math.PI);
+      if (degrees < 0) degrees += 360;
+
+      const index = Math.round(degrees / 45) % 8;
+      const updateBytes = DIRECTION_COMMAND_BYTES[index];
+
+      buffer[4] = Math.ceil(Math.abs(speedX) * 0x08);
+      buffer[5] = Math.ceil(Math.abs(speedY) * 0x08);
+      buffer[6] = updateBytes[0];
+      buffer[7] = updateBytes[1];
+    }
+    await this.send(buffer);
   }
 
   private send(data: Buffer) {
@@ -112,7 +142,6 @@ export class CamerasService {
       name: `${i + 1}`,
       on: powers[i]
     }));
-    //return await this.clients[0].queryPower();
   }
 
   setPower(on: boolean) {
@@ -122,26 +151,8 @@ export class CamerasService {
   requestZoom(id: number, speed: number) {
     return this.clients[id - 1]?.requestZoom(speed);
   }
-  // private async queryPower(id: number) {
-  //   const result = await this.send(id, Buffer.from([0x81, 0x09, 0x04, 0x00, 0xFF]));
-  //   return result[2] === 0x02;
-  // }
 
-  // private send(id: number, data: Buffer): Promise<Buffer> {
-  //   const client = dgram.createSocket('udp4');
-  //   return new Promise((resolve, reject)=> {
-  //     const timeoutHolder: any = { id: undefined };
-  //     client.on('message', msg => {
-  //       console.log('message');
-  //       resolve(msg);
-  //     });
-  //     client.send(data, 1259, this.configs[id].ip, err => {
-  //       console.log('callback', err);
-  //       if (err) {
-  //         reject(err);
-  //       }
-  //     });
-  //     console.log('after');
-  //   })
-  // }
+  requestPanTilt(id: number, speedX: number, speedY: number) {
+    return this.clients[id - 1]?.requestPanTilt(speedX, speedY);
+  }
 }
