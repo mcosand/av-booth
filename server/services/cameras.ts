@@ -1,8 +1,10 @@
-import { rejects } from 'assert';
 import dgram from 'dgram';
+import { asyncOnMap } from './util';
+import { ApiDeviceStatus } from '../../common/api-models';
 
 export interface CameraConfig {
   ip: string;
+  name: string;
 }
 
 const DIRECTION_COMMAND_BYTES = [
@@ -17,14 +19,14 @@ const DIRECTION_COMMAND_BYTES = [
 ];
 
 class CameraClient {
-  readonly id: number;
+  readonly id: string;
   private readonly config: CameraConfig;
   private readonly queue: { data: Buffer, resolve: (data: Buffer) => void, reject: (err: Error) => void }[] = [];
 
   private client = dgram.createSocket('udp4');
   private timeout;
 
-  constructor(id: number, config: CameraConfig) {
+  constructor(id: string, config: CameraConfig) {
     this.id = id;
     this.config = config;
     this.client.on('message', this.handleMessage.bind(this));
@@ -33,9 +35,9 @@ class CameraClient {
   async queryPower() {
     try {
       const result = await this.send(Buffer.from([0x81, 0x09, 0x04, 0x00, 0xff]));
-      return result[2] === 0x02;
+      return { id: this.id, power: result[2] === 0x02 ? 'on' : 'off' };
     } catch (err) {
-      return false;
+      return { id: this.id, power: 'unknown' };
     }
   }
 
@@ -54,7 +56,12 @@ class CameraClient {
     if (speed) {
       data = ((speed > 0) ? 0x20 : 0x30) + (Math.ceil(Math.abs(speed) * 7));
     }
-    const result = await this.send(Buffer.from([0x81, 0x01, 0x04, 0x07, data, 0xFF]));
+    try {
+      const result = await this.send(Buffer.from([0x81, 0x01, 0x04, 0x07, data, 0xFF]));
+    } catch (err) {
+      console.log('camera error', this.id, err);
+      return false;
+    }
     return true;
   }
 
@@ -74,7 +81,13 @@ class CameraClient {
       buffer[6] = updateBytes[0];
       buffer[7] = updateBytes[1];
     }
-    await this.send(buffer);
+    try {
+      await this.send(buffer);
+    } catch (err) {
+      console.log('camera error', this.id, err);
+      return false;
+    }
+    return true;
   }
 
   private send(data: Buffer) {
@@ -125,34 +138,41 @@ class CameraClient {
 
 
 export class CamerasService {
-  readonly clients: CameraClient[];
-  readonly idxs: number[];
+  readonly clients: Record<string, CameraClient> = {};
+  readonly configs: Record<string, CameraConfig> = {};
+
+  static getIdFromIndex(idx: number, configs: CameraConfig[]) {
+    if (idx < configs.length) {
+      return `cam-${idx + 1}`;
+    }
+    return undefined;
+  }
 
   constructor(configs: CameraConfig[]) {
-    this.clients = configs.map((c, i) => new CameraClient(i, c));
-    this.idxs = configs.map((_c, i) => i);
+    for (let i = 0; i < configs.length; i++) {
+      const id = CamerasService.getIdFromIndex(i, configs)!;
+      this.clients[id] = new CameraClient(id, configs[i]);
+      this.configs[id] = configs[i]
+    }
   }
 
-  async getStatus() {
-    const [powers] = await Promise.all([
-      Promise.all(this.clients.map(c => c.queryPower())),
-    ]);
-    console.log('finished getting updates');
-    return this.idxs.map(i => ({
-      name: `${i + 1}`,
-      on: powers[i]
-    }));
+  async getAllStatus(): Promise<Record<string, ApiDeviceStatus>> {
+    return asyncOnMap(
+      this.configs,
+      (_config, id) => this.clients[id].queryPower(),
+      (_id, prev, update) => ({ ...prev, power: update.power } as ApiDeviceStatus)
+    );
   }
 
-  setPower(on: boolean) {
-    return Promise.all(this.clients.map(c => c.setPower(on)));
+  setPower(id: string, on: boolean) {
+    return this.clients[id].setPower(on);
   }
 
-  requestZoom(id: number, speed: number) {
-    return this.clients[id - 1]?.requestZoom(speed);
+  requestZoom(id: string, speed: number) {
+    return this.clients[id]?.requestZoom(speed);
   }
 
-  requestPanTilt(id: number, speedX: number, speedY: number) {
-    return this.clients[id - 1]?.requestPanTilt(speedX, speedY);
+  requestPanTilt(id: string, speedX: number, speedY: number) {
+    return this.clients[id]?.requestPanTilt(speedX, speedY);
   }
 }

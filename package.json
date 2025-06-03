@@ -12,8 +12,11 @@
     "build-server": "tsup"
   },
   "dependencies": {
+    "@babel/plugin-proposal-decorators": "^7.27.1",
     "@tailwindcss/vite": "^4.1.7",
     "daisyui": "^5.0.38",
+    "mobx": "^6.13.7",
+    "mobx-react-lite": "^4.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

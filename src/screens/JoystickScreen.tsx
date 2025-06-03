@@ -8,11 +8,10 @@ import type { TallyMessage } from "../../common/socket-models";
 export default function JoystickScreen() {
   const config = React.useContext(ConfigContext);
   const socket = useSocket();
-  const [selectedCam, setSelectedCam] = React.useState<number>(1);
+  const [selectedCam, setSelectedCam] = React.useState<string>(config.cameras[0]?.id);
   const [tally, setTally] = React.useState<TallyMessage>();
 
   const onPanTiltEvent = React.useCallback(function onPanTileEvent(e: IJoystickUpdateEvent) {
-    console.log('tilt event', e);
     if (e.type === 'stop') {
       socket?.emit('pantilt', { id: selectedCam, speedX: 0, speedY: 0 });
     } else if (e.type === 'move') {
@@ -23,7 +22,6 @@ export default function JoystickScreen() {
   }, [socket, selectedCam]);
 
   const onZoomEvent = React.useCallback(function onZoomEvent(e: IJoystickUpdateEvent) {
-    console.log('zoom event', e);
     if (e.type === 'stop') {
       socket?.emit('zoom', { id: selectedCam, speed: 0 });
     } else if (e.type === 'move') {
@@ -39,6 +37,10 @@ export default function JoystickScreen() {
     }
   }, [socket]);
 
+  React.useEffect(() => {
+    if (config && config.cameras.length && !selectedCam) setSelectedCam(config.cameras[0]?.id);
+  }, [config])
+
   return (
     <div className="flex flex-wrap w-screen h-screen">
       <div className="flex w-1/3 items-center justify-center">
@@ -50,10 +52,10 @@ export default function JoystickScreen() {
           stop={onPanTiltEvent} />
       </div>
       <div className="flex flex-col justify-evenly w-1/3">
-        {config.cameras.map((c, i) => (
-          <button key={c.ip} className={`btn btn-lg ${selectedCam === i + 1 ? '' : 'btn-soft'} btn-primary`} onClick={() => setSelectedCam(i + 1)}>
-            Camera {i + 1}
-            {(tally?.program === (i + 1)) && <div className="badge badge-error"></div>}
+        {config.cameras.map(c => (
+          <button key={c.id} className={`btn btn-lg ${selectedCam === c.id ? '' : 'btn-soft'} btn-primary`} onClick={() => setSelectedCam(c.id)}>
+            {c.name}
+            {(tally?.program === c.id) && <div className="badge badge-error"></div>}
           </button>
         ))}
       </div>

@@ -1,6 +1,6 @@
 export interface TallyMessage {
-  program?: number;
-  preview?: number;
+  program?: string;
+  preview?: string;
 }
 
 export interface ServerToClientMessages {
@@ -9,6 +9,6 @@ export interface ServerToClientMessages {
 
 export interface ClientToServerMessage {
   'get-tally': () => void;
-  pantilt: (data: { id: number, speedX: number, speedY: number }) => void;
-  zoom: (data: { id: number, speed: number }) => void;
+  pantilt: (data: { id: string, speedX: number, speedY: number }) => void;
+  zoom: (data: { id: string, speed: number }) => void;
 }

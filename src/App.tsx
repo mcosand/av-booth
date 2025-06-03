@@ -1,14 +1,11 @@
 import { useState, useEffect, createContext } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { RootScreen } from "./screens/RootScreen";
-import GetReadyScreen from "./screens/GetReadyScreen";
+import GetReadyScreen from "./screens/get-ready/GetReadyScreen";
 import JoystickScreen from "./screens/JoystickScreen";
 import { SocketProvider } from "./SocketContext";
 import ViewScreen from "./screens/ViewScreen";
-
-interface Config {
-  cameras: { ip: string }[];
-}
+import type { ApiResult, ApiConfigResult } from "@common/api-models";
 
 const router = createBrowserRouter([
   {
@@ -23,14 +20,15 @@ const router = createBrowserRouter([
   },
 ]);
 
-export const ConfigContext = createContext<Config>({ cameras: [] });
+export const ConfigContext = createContext<ApiConfigResult>({ cameras: [], projectors: [] });
 
 function App() {
-  const [config, setConfig] = useState<Config>({ cameras: [] });
+  const [config, setConfig] = useState<ApiConfigResult>({ cameras: [], projectors: [] });
 
   useEffect(() => {
     fetch("/api/config")
-      .then((r) => r.json())
+      .then<ApiResult<ApiConfigResult>>((r) => r.json())
+      .then(r => r.result)
       .then(setConfig);
   }, []);
 
