@@ -11,8 +11,7 @@ import { ClientToServerMessage, ServerToClientMessages, TallyMessage } from '../
 import { OptomaProjectorsService, ProjectorConfig } from './services/optoma';
 import { ApiConfigResult } from '../common/api-models';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const ROOT_DIR = import.meta?.dirname ?? __dirname;
 
 interface ConfigJson {
   port?: number | string;
@@ -115,8 +114,8 @@ async function startServer() {
     res.json({ result: await projectorSvc.setPower(req.params.id, req.params.state === 'on') });
   })
 
-  app.use('/', express.static(resolve(__dirname, 'public')));
-  app.get('{*path}', (req, res) => res.sendFile(resolve(__dirname, 'public/index.html')));
+  app.use('/', express.static(resolve(ROOT_DIR, 'public')));
+  app.get('{*path}', (req, res) => res.sendFile(resolve(ROOT_DIR, 'public/index.html')));
 
   httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Server listening at http://0.0.0.0:${port}`);
